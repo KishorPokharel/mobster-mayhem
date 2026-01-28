@@ -128,6 +128,44 @@
             background: #a67c1a;
         }
 
+        #gameWon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 40, 0, 0.95);
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            color: #fff;
+            display: none;
+            z-index: 100;
+            border: 4px solid #44ff44;
+        }
+
+        #gameWon h1 {
+            font-size: 42px;
+            color: #44ff44;
+            margin-bottom: 20px;
+            text-shadow: 3px 3px 6px #000;
+        }
+
+        #gameWon button {
+            padding: 15px 30px;
+            font-size: 20px;
+            background: #44aa44;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-family: 'Arial Black', Arial, sans-serif;
+        }
+
+        #gameWon button:hover {
+            background: #55cc55;
+        }
+
         #instructions {
             position: absolute;
             top: 50%;
@@ -235,6 +273,13 @@
         <button onclick="restartGame()">PLAY AGAIN</button>
     </div>
 
+    <div id="gameWon">
+        <h1>🏛️ YOU REACHED THE SANCTUARY! 🏛️</h1>
+        <p>You successfully made it through the zombie-infested streets!</p>
+        <p id="finalScoreWon"></p>
+        <button onclick="restartGame()">PLAY AGAIN</button>
+    </div>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -298,6 +343,7 @@
         const buildings = [];
         const healthPickups = [];
         const crates = [];
+        const acidSplatters = [];
 
         // Zones
         const zones = [];
@@ -413,6 +459,7 @@
 
         function restartGame() {
             document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('gameWon').style.display = 'none';
             score = 0;
             currentZone = 1;
             player.health = player.maxHealth;
@@ -429,6 +476,7 @@
             bloodSplatters.length = 0;
             healthPickups.length = 0;
             crates.length = 0;
+            acidSplatters.length = 0;
             initZones();
             generateBuildings();
             spawnZoneEnemies(zones[0]);
@@ -447,32 +495,42 @@
             let jumperCount = 0;
             let batCount = 0;
             
-            if (zone.id <= 2) {
-                // Zones 1-2: Only regular, crawlers, and bats
-                regularCount = 3;
-                crawlerCount = 2;
-                batCount = 2;
-            } else if (zone.id <= 4) {
-                // Zones 3-4: Introduce shooters
+            if (zone.id === 1) {
+                // Zone 1: Only regular zombies
                 regularCount = 4;
-                crawlerCount = 2;
-                shooterCount = 1;
-                batCount = 2;
-            } else if (zone.id <= 6) {
-                // Zones 5-6: More shooters, introduce jumpers
+            } else if (zone.id === 2) {
+                // Zone 2: Introduce crawlers
+                regularCount = 4;
+                crawlerCount = 3;
+            } else if (zone.id === 3) {
+                // Zone 3: Introduce bats
                 regularCount = 5;
-                crawlerCount = 2;
+                crawlerCount = 3;
+                batCount = 2;
+            } else if (zone.id <= 5) {
+                // Zones 4-5: Introduce shooters
+                regularCount = 5;
+                crawlerCount = 3;
+                shooterCount = 2;
+                batCount = 2;
+            } else if (zone.id <= 7) {
+                // Zones 6-7: Introduce jumpers
+                regularCount = 6;
+                crawlerCount = 3;
                 shooterCount = 2;
                 jumperCount = 1;
                 batCount = 3;
-            } else {
-                // Zones 7+: All enemy types including runners
-                regularCount = 6;
-                crawlerCount = 2;
+            } else if (zone.id <= 9) {
+                // Zones 8-9: All enemy types including runners
+                regularCount = 7;
+                crawlerCount = 3;
                 shooterCount = 2;
                 runnerCount = 1;
                 jumperCount = 1;
                 batCount = 3;
+            } else {
+                // Zone 10 (Final zone): No enemies - reach Sanctuary
+                regularCount = 0;
             }
             
             console.log(`Spawning Zone ${zone.id}: ${regularCount} regular, ${crawlerCount} crawler, ${shooterCount} shooter, ${runnerCount} runner, ${jumperCount} jumper, ${batCount} bat`);
@@ -650,14 +708,20 @@
                 console.log(`Spawned jumper zombie at worldX: ${position}`);
             }
             
-            // Spawn bat zombies - flying enemies that spit acid
+            // Spawn bat zombies - spawn from SKY (TOP of screen)
             for (let i = 0; i < batCount; i++) {
-                const position = spawnStart + (spawnRange / (batCount + 1)) * (i + 1);
+                // Spawn from random X position in center-right area
+                const screenSpawnX = canvas.width / 2 + Math.random() * (canvas.width / 2 - 100);
+                const spawnWorldX = cameraX + screenSpawnX;
+                
+                const targetFlyHeight = 150 + Math.random() * 80; // Target height above ground
+                
                 const enemy = {
-                    worldX: position,
-                    x: 0,
-                    y: groundY - 200 - Math.random() * 100, // Fly high in the air
-                    baseY: groundY - 200 - Math.random() * 100, // Store base flying height
+                    worldX: spawnWorldX,
+                    x: screenSpawnX,
+                    y: -50 - Math.random() * 50, // START ABOVE SCREEN
+                    targetY: groundY - targetFlyHeight, // Where they'll fly to
+                    baseY: groundY - targetFlyHeight,
                     width: 45,
                     height: 35,
                     speed: 1.2 + Math.random() * 0.5,
@@ -665,16 +729,17 @@
                     maxHealth: 35 + (zone.id * 5),
                     damage: 8 + (zone.id * 1),
                     attackCooldown: 0,
-                    shootCooldown: 40 + Math.random() * 20, // Spit cooldown
+                    shootCooldown: 40 + Math.random() * 20,
                     animFrame: 0,
                     animTimer: 0,
-                    hoverOffset: 0,
+                    hoverOffset: Math.random() * Math.PI * 2,
+                    descendSpeed: 2, // Speed of descending
                     type: 'bat',
                     zoneId: zone.id
                 };
                 enemies.push(enemy);
                 zone.enemies.push(enemy);
-                console.log(`Spawned bat zombie at worldX: ${position}`);
+                console.log(`Spawned bat from SKY at screen X: ${screenSpawnX}, will descend to Y: ${enemy.targetY}`);
             }
             
             zone.enemyCount = regularCount + shooterCount + runnerCount + crawlerCount + jumperCount + batCount;
@@ -841,6 +906,11 @@
                     if (currentZone !== i + 1) {
                         currentZone = i + 1;
                         console.log(`Player entered zone ${currentZone} at worldX: ${player.worldX}`);
+                        
+                        // Check if reached Zone 10 (Sanctuary)
+                        if (currentZone === 10) {
+                            gameWon();
+                        }
                     }
                     
                     // Spawn enemies if not spawned yet
@@ -860,6 +930,12 @@
                 console.log(`Zone ${zone.id} CLEARED! Killed: ${zone.enemiesKilled}/${zone.enemyCount}`);
                 showZoneCleared();
             }
+        }
+
+        function gameWon() {
+            gameRunning = false;
+            document.getElementById('gameWon').style.display = 'flex';
+            document.getElementById('finalScoreWon').textContent = `Final Score: ${score}`;
         }
 
         function showZoneCleared() {
@@ -940,9 +1016,22 @@
                 } else if (enemy.type === 'bat') {
                     // Bats fly and hover, spit acid from above
                     
-                    // Hovering motion
-                    enemy.hoverOffset += 0.05;
-                    enemy.y = enemy.baseY + Math.sin(enemy.hoverOffset) * 15;
+                    // Descend from sky if still above target height
+                    if (enemy.descendSpeed && enemy.y < enemy.targetY) {
+                        enemy.y += enemy.descendSpeed;
+                        enemy.baseY = enemy.y;
+                        if (enemy.y >= enemy.targetY) {
+                            enemy.y = enemy.targetY;
+                            enemy.baseY = enemy.targetY;
+                            enemy.descendSpeed = 0; // Stop descending, start hovering
+                        }
+                    }
+                    
+                    // Hovering motion (only when not descending)
+                    if (!enemy.descendSpeed) {
+                        enemy.hoverOffset += 0.05;
+                        enemy.y = enemy.baseY + Math.sin(enemy.hoverOffset) * 15;
+                    }
                     
                     // Fly toward player horizontally
                     if (absDistance > 200 && absDistance < 600) {
@@ -955,11 +1044,11 @@
                         enemy.worldX += (enemy.speed * 0.8) * (distanceToPlayer > 0 ? 1 : -1);
                     }
                     
-                    // Spit acid at player
+                    // Spit acid at player (only when finished descending)
                     enemy.shootCooldown++;
                     const isOnScreen = enemy.x > -100 && enemy.x < canvas.width + 100;
                     
-                    if (enemy.shootCooldown > 90 && absDistance < 600 && absDistance > 150 && isOnScreen) {
+                    if (enemy.shootCooldown > 90 && absDistance < 600 && absDistance > 150 && isOnScreen && !enemy.descendSpeed) {
                         enemy.shootCooldown = 0;
                         // Create acid spit
                         const angle = Math.atan2(player.y + player.height / 2 - enemy.y - enemy.height / 2, 
@@ -1250,8 +1339,38 @@
                     continue;
                 }
 
-                // Remove off-screen bullets
-                if (bullet.x < -100 || bullet.x > canvas.width + 100 || bullet.y < 0 || bullet.y > canvas.height) {
+                // Check if acid hits the ground
+                if (bullet.type === 'acid' && bullet.y >= groundY - 5) {
+                    // Create acid splatter on ground
+                    acidSplatters.push({
+                        worldX: bullet.worldX,
+                        x: bullet.x,
+                        y: groundY - 10,
+                        size: 25 + Math.random() * 15,
+                        alpha: 0.8,
+                        fadeRate: 0.003
+                    });
+                    
+                    // Splatter particles
+                    for (let k = 0; k < 8; k++) {
+                        particles.push({
+                            worldX: bullet.worldX,
+                            x: bullet.x,
+                            y: groundY,
+                            velocityX: (Math.random() - 0.5) * 6,
+                            velocityY: -Math.random() * 3,
+                            size: 2 + Math.random() * 2,
+                            life: 20,
+                            color: '#00ff00'
+                        });
+                    }
+                    
+                    enemyBullets.splice(i, 1);
+                    continue;
+                }
+
+                // Remove off-screen bullets (horizontal only)
+                if (bullet.x < -100 || bullet.x > canvas.width + 100) {
                     enemyBullets.splice(i, 1);
                 }
             }
@@ -1567,6 +1686,57 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             ctx.restore();
+            
+            // Draw Sanctuary building at zone 10
+            if (currentZone >= 9) {
+                const sanctuaryX = zones[9].startX + 500;
+                const sanctuaryScreenX = sanctuaryX - cameraX;
+                
+                if (sanctuaryScreenX > -400 && sanctuaryScreenX < canvas.width + 400) {
+                    // Large safe building
+                    ctx.fillStyle = '#3a5a3a';
+                    const buildingWidth = 350;
+                    const buildingHeight = 400;
+                    const buildingY = groundY - buildingHeight;
+                    
+                    ctx.fillRect(sanctuaryScreenX, buildingY, buildingWidth, buildingHeight);
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(sanctuaryScreenX, buildingY, buildingWidth, buildingHeight);
+                    
+                    // Windows
+                    ctx.fillStyle = '#ffee88';
+                    for (let row = 0; row < 8; row++) {
+                        for (let col = 0; col < 5; col++) {
+                            ctx.fillRect(
+                                sanctuaryScreenX + 30 + col * 60,
+                                buildingY + 30 + row * 45,
+                                35, 30
+                            );
+                        }
+                    }
+                    
+                    // Doors
+                    ctx.fillStyle = '#2a4a2a';
+                    ctx.fillRect(sanctuaryScreenX + buildingWidth / 2 - 40, groundY - 100, 80, 100);
+                    ctx.strokeStyle = '#8b6914';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(sanctuaryScreenX + buildingWidth / 2 - 40, groundY - 100, 80, 100);
+                    
+                    // "SANCTUARY" sign
+                    ctx.fillStyle = '#ffee88';
+                    ctx.font = 'bold 40px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('SANCTUARY', sanctuaryScreenX + buildingWidth / 2, buildingY + 50);
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 2;
+                    ctx.strokeText('SANCTUARY', sanctuaryScreenX + buildingWidth / 2, buildingY + 50);
+                    
+                    // Glowing green aura (safe zone)
+                    ctx.fillStyle = 'rgba(50, 255, 50, 0.2)';
+                    ctx.fillRect(sanctuaryScreenX - 50, buildingY - 50, buildingWidth + 100, buildingHeight + 50);
+                }
+            }
         }
 
         function drawPlayer() {
@@ -2085,6 +2255,40 @@
             });
         }
 
+        function drawAcidSplatters() {
+            acidSplatters.forEach((splatter, index) => {
+                splatter.x = splatter.worldX - cameraX;
+                if (splatter.x > -50 && splatter.x < canvas.width + 50) {
+                    // Main green acid pool
+                    ctx.fillStyle = `rgba(50, 255, 50, ${splatter.alpha})`;
+                    ctx.beginPath();
+                    ctx.ellipse(splatter.x, splatter.y, splatter.size, splatter.size * 0.4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Inner glow
+                    ctx.fillStyle = `rgba(150, 255, 150, ${splatter.alpha * 0.7})`;
+                    ctx.beginPath();
+                    ctx.ellipse(splatter.x, splatter.y, splatter.size * 0.6, splatter.size * 0.25, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Bubbles
+                    ctx.fillStyle = `rgba(200, 255, 200, ${splatter.alpha * 0.5})`;
+                    for (let i = 0; i < 3; i++) {
+                        const offsetX = (Math.random() - 0.5) * splatter.size * 0.8;
+                        const offsetY = (Math.random() - 0.5) * splatter.size * 0.3;
+                        ctx.beginPath();
+                        ctx.arc(splatter.x + offsetX, splatter.y + offsetY, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                
+                splatter.alpha -= splatter.fadeRate;
+                if (splatter.alpha <= 0) {
+                    acidSplatters.splice(index, 1);
+                }
+            });
+        }
+
         function updateUI() {
             document.getElementById('health').textContent = Math.max(0, Math.round(player.health));
             document.getElementById('health-fill').style.width = Math.max(0, (player.health / player.maxHealth) * 100) + '%';
@@ -2108,6 +2312,7 @@
 
             drawBackground();
             drawBloodSplatters();
+            drawAcidSplatters();
             drawCrates();
             drawHealthPickups();
             updatePlayer();
